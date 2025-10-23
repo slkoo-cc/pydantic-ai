@@ -634,25 +634,32 @@ def override_allow_model_requests(allow_model_requests: bool) -> Iterator[None]:
     finally:
         ALLOW_MODEL_REQUESTS = old_value  # pyright: ignore[reportConstantRedefinition]
 
-def infer_provider_model_class(model: KnownModelName | str) -> tuple[type[Model], type[Provider]]:  # noqa: C901
+
+@dataclass
+class ModelClassInformation:
+    model_class: type[Model]
+    provider_class: type[Provider[Any]] | None
+
+
+def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation:
     """Infer the model and provider from the name."""
-    
-    if model == 'test':
+
+    if model == "test":
         from .test import TestModel
 
-        return TestModel, None
+        return ModelClassInformation(model_class=TestModel, provider_class=None)
 
     try:
-        provider, model_name = model.split(':', maxsplit=1)
+        provider, model_name = model.split(":", maxsplit=1)
     except ValueError:
         provider = None
         model_name = model
-        if model_name.startswith(('gpt', 'o1', 'o3')):
-            provider = 'openai'
-        elif model_name.startswith('claude'):
-            provider = 'anthropic'
-        elif model_name.startswith('gemini'):
-            provider = 'google-gla'
+        if model_name.startswith(("gpt", "o1", "o3")):
+            provider = "openai"
+        elif model_name.startswith("claude"):
+            provider = "anthropic"
+        elif model_name.startswith("gemini"):
+            provider = "google-gla"
 
         if provider is not None:
             warnings.warn(
@@ -660,94 +667,97 @@ def infer_provider_model_class(model: KnownModelName | str) -> tuple[type[Model]
                 DeprecationWarning,
             )
         else:
-            raise UserError(f'Unknown model: {model}')
+            raise UserError(f"Unknown model: {model}")
 
-    if provider == 'vertexai':  # pragma: no cover
+    if provider == "vertexai":  # pragma: no cover
         warnings.warn(
             "The 'vertexai' provider name is deprecated. Use 'google-vertex' instead.",
             DeprecationWarning,
         )
-        provider = 'google-vertex'
+        provider = "google-vertex"
 
-    if provider == 'gateway':
-        from ..providers.gateway import infer_provider_model_class as infer_provider_model_class_from_gateway
-
-        return infer_provider_model_class_from_gateway(model_name)
-    elif provider == 'cohere':
+    inferred_model: type[Model]
+    if provider == "gateway":
+        raise ValueError("`gateway`")
+    elif provider == "cohere":
         from .cohere import CohereModel
 
-        return CohereModel, infer_provider_class(provider)
+        inferred_model = CohereModel
     elif provider in (
-        'azure',
-        'deepseek',
-        'cerebras',
-        'fireworks',
-        'github',
-        'grok',
-        'heroku',
-        'moonshotai',
-        'ollama',
-        'openai',
-        'openai-chat',
-        'openrouter',
-        'together',
-        'vercel',
-        'litellm',
-        'nebius',
+        "azure",
+        "deepseek",
+        "cerebras",
+        "fireworks",
+        "github",
+        "grok",
+        "heroku",
+        "moonshotai",
+        "ollama",
+        "openai",
+        "openai-chat",
+        "openrouter",
+        "together",
+        "vercel",
+        "litellm",
+        "nebius",
     ):
         from .openai import OpenAIChatModel
 
-        return OpenAIChatModel, infer_provider_class(provider)
-    elif provider == 'openai-responses':
+        inferred_model = OpenAIChatModel
+    elif provider == "openai-responses":
         from .openai import OpenAIResponsesModel
 
-        return OpenAIResponsesModel, infer_provider_class('openai')
-    elif provider in ('google-gla', 'google-vertex'):
+        inferred_model = OpenAIResponsesModel
+    elif provider in ("google-gla", "google-vertex"):
         from .google import GoogleModel
 
-        return GoogleModel, infer_provider_class(provider)
-    elif provider == 'groq':
+        inferred_model = GoogleModel
+    elif provider == "groq":
         from .groq import GroqModel
 
-        return GroqModel, infer_provider_class(provider)
-    elif provider == 'mistral':
+        inferred_model = GroqModel
+    elif provider == "mistral":
         from .mistral import MistralModel
 
-        return MistralModel, infer_provider_class(provider)
-    elif provider == 'anthropic':
+        inferred_model = MistralModel
+    elif provider == "anthropic":
         from .anthropic import AnthropicModel
 
-        return AnthropicModel, infer_provider_class(provider)
-    elif provider == 'bedrock':
+        inferred_model = AnthropicModel
+    elif provider == "bedrock":
         from .bedrock import BedrockConverseModel
 
-        return BedrockConverseModel, infer_provider_class(provider)
-    elif provider == 'huggingface':
+        inferred_model = BedrockConverseModel
+    elif provider == "huggingface":
         from .huggingface import HuggingFaceModel
 
-        return HuggingFaceModel, infer_provider_class(provider)
+        inferred_model = HuggingFaceModel
     else:
-        raise UserError(f'Unknown model: {model}')  # pragma: no cover
+        raise UserError(f"Unknown model: {model}")  # pragma: no cover
+
+    return ModelClassInformation(
+        model_class=inferred_model, provider_class=infer_provider_class(provider)
+    )
 
 
 def infer_model(model: Model | KnownModelName | str) -> Model:
     """Infer the model from the name."""
-    
+
     if isinstance(model, Model):
         return model
-    
+
     try:
-        provider, _ = model.split(':', maxsplit=1)
+        provider, _ = model.split(":", maxsplit=1)
     except ValueError:
         provider = None
 
-    if provider == 'gateway':
+    if provider == "gateway":
         from ..providers.gateway import infer_model as infer_model_from_gateway
 
         return infer_model_from_gateway(model)
-    
-    model_class, provider_class = infer_provider_model_class(model)
-    return model_class(provider=provider_class)
+
+    model_information = infer_provider_model_class(model)
+    return model_information.model_class(provider=model_information.provider_class)
 
 
 def cached_async_http_client(*, provider: str | None = None, timeout: int = 600, connect: int = 5) -> httpx.AsyncClient:

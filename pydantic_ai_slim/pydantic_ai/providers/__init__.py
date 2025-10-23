@@ -51,9 +51,9 @@ class Provider(ABC, Generic[InterfaceClient]):
         return f'{self.__class__.__name__}(name={self.name}, base_url={self.base_url})'  # pragma: lax no cover
 
 
-def infer_provider_class(provider: str) -> type[Provider[Any]]:  # noqa: C901
+def infer_provider_class(provider: str) -> type[Provider[Any]]:
     """Infers the provider class from the provider name."""
-    if provider == 'openai':
+    if provider == 'openai' or provider == 'openai-responses':
         from .openai import OpenAIProvider
 
         return OpenAIProvider
