@@ -730,7 +730,7 @@ def infer_provider_model_class(model: KnownModelName | str) -> tuple[type[Model]
         raise UserError(f'Unknown model: {model}')  # pragma: no cover
 
 
-def infer_model(model: Model | KnownModelName | str) -> Model:  # noqa: C901
+def infer_model(model: Model | KnownModelName | str) -> Model:
     """Infer the model from the name."""
     
     if isinstance(model, Model):
