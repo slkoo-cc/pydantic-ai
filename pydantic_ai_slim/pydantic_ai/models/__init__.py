@@ -735,11 +735,11 @@ def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInforma
 
         inferred_model = HuggingFaceModel
     else:
-        raise UserError(f"Unknown model: {model}")  # pragma: no cover
+        raise UserError(f'Unknown model: {model}')  # pragma: no cover
 
     return ModelClassInformation(
-        model_class=inferred_model, 
-        provider_class=infer_provider_class(provider_name),
+        model_class=inferred_model,
+        provider_class=infer_provider_class(provider_name) if not provider_name.startswith('gateway/') else None,
         model_name=model_name,
         provider_name=provider_name,
     )
