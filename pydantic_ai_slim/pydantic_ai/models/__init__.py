@@ -41,9 +41,9 @@ from ..messages import (
     ToolCallPart,
     VideoUrl,
 )
-from ..providers import Provider, infer_provider_class
 from ..output import OutputMode
 from ..profiles import DEFAULT_PROFILE, ModelProfile, ModelProfileSpec
+from ..providers import Provider, infer_provider_class, infer_provider
 from ..settings import ModelSettings, merge_model_settings
 from ..tools import ToolDefinition
 from ..usage import RequestUsage
@@ -130,15 +130,8 @@ KnownModelName = TypeAliasType(
         'cerebras:qwen-3-235b-a22b-thinking-2507',
         'cohere:c4ai-aya-expanse-32b',
         'cohere:c4ai-aya-expanse-8b',
-        'cohere:command',
-        'cohere:command-light',
-        'cohere:command-light-nightly',
         'cohere:command-nightly',
-        'cohere:command-r',
-        'cohere:command-r-03-2024',
         'cohere:command-r-08-2024',
-        'cohere:command-r-plus',
-        'cohere:command-r-plus-04-2024',
         'cohere:command-r-plus-08-2024',
         'cohere:command-r7b-12-2024',
         'deepseek:deepseek-chat',
@@ -639,6 +632,8 @@ def override_allow_model_requests(allow_model_requests: bool) -> Iterator[None]:
 class ModelClassInformation:
     model_class: type[Model]
     provider_class: type[Provider[Any]] | None
+    model_name: str
+    provider_name: str | None
 
 
 def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation:
@@ -647,88 +642,95 @@ def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInforma
     if model == "test":
         from .test import TestModel
 
-        return ModelClassInformation(model_class=TestModel, provider_class=None)
+        return ModelClassInformation(model_class=TestModel, provider_class=None, model_name='test', provider_name=None)
 
     try:
-        provider, model_name = model.split(":", maxsplit=1)
+        provider_name, model_name = model.split(':', maxsplit=1)
     except ValueError:
-        provider = None
+        provider_name = None
         model_name = model
-        if model_name.startswith(("gpt", "o1", "o3")):
-            provider = "openai"
-        elif model_name.startswith("claude"):
-            provider = "anthropic"
-        elif model_name.startswith("gemini"):
-            provider = "google-gla"
+        if model_name.startswith(('gpt', 'o1', 'o3')):
+            provider_name = 'openai'
+        elif model_name.startswith('claude'):
+            provider_name = 'anthropic'
+        elif model_name.startswith('gemini'):
+            provider_name = 'google-gla'
 
-        if provider is not None:
+        if provider_name is not None:
             warnings.warn(
-                f"Specifying a model name without a provider prefix is deprecated. Instead of {model_name!r}, use '{provider}:{model_name}'.",
+                f"Specifying a model name without a provider prefix is deprecated. Instead of {model_name!r}, use '{provider_name}:{model_name}'.",
                 DeprecationWarning,
             )
         else:
             raise UserError(f"Unknown model: {model}")
 
-    if provider == "vertexai":  # pragma: no cover
+    if provider_name == 'vertexai':  # pragma: no cover
         warnings.warn(
             "The 'vertexai' provider name is deprecated. Use 'google-vertex' instead.",
             DeprecationWarning,
         )
-        provider = "google-vertex"
+        provider_name = 'google-vertex'
+
+    model_kind = provider_name
+    if model_kind.startswith('gateway/'):
+        model_kind = provider_name.removeprefix('gateway/')
+    if model_kind in (
+        'openai',
+        'azure',
+        'deepseek',
+        'cerebras',
+        'fireworks',
+        'github',
+        'grok',
+        'heroku',
+        'moonshotai',
+        'ollama',
+        'openai-chat',
+        'openrouter',
+        'together',
+        'vercel',
+        'litellm',
+        'nebius',
+        'ovhcloud',
+    ):
+        model_kind = 'openai-chat'
+    elif model_kind in ('google-gla', 'google-vertex'):
+        model_kind = 'google'
 
     inferred_model: type[Model]
-    if provider == "gateway":
-        raise ValueError("`gateway`")
-    elif provider == "cohere":
-        from .cohere import CohereModel
-
-        inferred_model = CohereModel
-    elif provider in (
-        "azure",
-        "deepseek",
-        "cerebras",
-        "fireworks",
-        "github",
-        "grok",
-        "heroku",
-        "moonshotai",
-        "ollama",
-        "openai",
-        "openai-chat",
-        "openrouter",
-        "together",
-        "vercel",
-        "litellm",
-        "nebius",
-    ):
+    if model_kind == 'openai-chat':
         from .openai import OpenAIChatModel
 
         inferred_model = OpenAIChatModel
-    elif provider == "openai-responses":
+    elif model_kind == 'openai-responses':
         from .openai import OpenAIResponsesModel
 
         inferred_model = OpenAIResponsesModel
-    elif provider in ("google-gla", "google-vertex"):
+    elif model_kind == 'google':
         from .google import GoogleModel
 
         inferred_model = GoogleModel
-    elif provider == "groq":
+    elif model_kind == 'groq':
         from .groq import GroqModel
 
         inferred_model = GroqModel
-    elif provider == "mistral":
+    elif model_kind == 'cohere':
+        from .cohere import CohereModel
+
+        inferred_model = CohereModel
+    elif model_kind == 'mistral':
         from .mistral import MistralModel
 
         inferred_model = MistralModel
-    elif provider == "anthropic":
+    elif model_kind == 'anthropic':
         from .anthropic import AnthropicModel
 
         inferred_model = AnthropicModel
-    elif provider == "bedrock":
+    elif model_kind == 'bedrock':
         from .bedrock import BedrockConverseModel
 
         inferred_model = BedrockConverseModel
-    elif provider == "huggingface":
+    elif model_kind == 'huggingface':
         from .huggingface import HuggingFaceModel
 
         inferred_model = HuggingFaceModel
@@ -736,7 +738,10 @@ def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInforma
         raise UserError(f"Unknown model: {model}")  # pragma: no cover
 
     return ModelClassInformation(
-        model_class=inferred_model, provider_class=infer_provider_class(provider)
+        model_class=inferred_model, 
+        provider_class=infer_provider_class(provider_name),
+        model_name=model_name,
+        provider_name=provider_name,
     )
 
 
@@ -746,18 +751,13 @@ def infer_model(model: Model | KnownModelName | str) -> Model:
     if isinstance(model, Model):
         return model
 
-    try:
-        provider, _ = model.split(":", maxsplit=1)
-    except ValueError:
-        provider = None
-
-    if provider == "gateway":
-        from ..providers.gateway import infer_model as infer_model_from_gateway
-
-        return infer_model_from_gateway(model)
-
     model_information = infer_provider_model_class(model)
-    return model_information.model_class(provider=model_information.provider_class)
+    if model_information.model_name == "test":
+        return model_information.model_class()
+    return model_information.model_class(
+        model_name=model_information.model_name, 
+        provider=infer_provider(model_information.provider_name),
+    )
 
 
 def cached_async_http_client(*, provider: str | None = None, timeout: int = 600, connect: int = 5) -> httpx.AsyncClient:
