@@ -641,7 +641,7 @@ class ModelClassInformation:
     """The provider name as parsed from input string"""
 
 
-def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation: # C901
+def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation:  # C901
     """Infer the model and provider from the name."""
     if model == 'test':
         from .test import TestModel
