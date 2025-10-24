@@ -630,13 +630,18 @@ def override_allow_model_requests(allow_model_requests: bool) -> Iterator[None]:
 
 @dataclass
 class ModelClassInformation:
+    """Metadata of model as parsed from string with the model class and provider class for instantiation."""
     model_class: type[Model]
+    """The raw model class"""
     provider_class: type[Provider[Any]] | None
+    """The raw provider class"""
     model_name: str
+    """The model name as parsed from input string"""
     provider_name: str | None
+    """The provider name as parsed from input string"""
 
 
-def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation:
+def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation: # C901
     """Infer the model and provider from the name."""
     if model == 'test':
         from .test import TestModel
