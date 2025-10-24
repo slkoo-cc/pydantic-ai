@@ -631,6 +631,7 @@ def override_allow_model_requests(allow_model_requests: bool) -> Iterator[None]:
 @dataclass
 class ModelClassInformation:
     """Metadata of model as parsed from string with the model class and provider class for instantiation."""
+
     model_class: type[Model]
     """The raw model class"""
     provider_class: type[Provider[Any]] | None
