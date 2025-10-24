@@ -43,7 +43,7 @@ from ..messages import (
 )
 from ..output import OutputMode
 from ..profiles import DEFAULT_PROFILE, ModelProfile, ModelProfileSpec
-from ..providers import Provider, infer_provider_class, infer_provider
+from ..providers import Provider, infer_provider, infer_provider_class
 from ..settings import ModelSettings, merge_model_settings
 from ..tools import ToolDefinition
 from ..usage import RequestUsage
@@ -639,7 +639,7 @@ class ModelClassInformation:
 def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInformation:
     """Infer the model and provider from the name."""
 
-    if model == "test":
+    if model == 'test':
         from .test import TestModel
 
         return ModelClassInformation(model_class=TestModel, provider_class=None, model_name='test', provider_name=None)
@@ -662,7 +662,7 @@ def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInforma
                 DeprecationWarning,
             )
         else:
-            raise UserError(f"Unknown model: {model}")
+            raise UserError(f'Unknown model: {model}')
 
     if provider_name == 'vertexai':  # pragma: no cover
         warnings.warn(
@@ -747,15 +747,14 @@ def infer_provider_model_class(model: KnownModelName | str) -> ModelClassInforma
 
 def infer_model(model: Model | KnownModelName | str) -> Model:
     """Infer the model from the name."""
-
     if isinstance(model, Model):
         return model
 
     model_information = infer_provider_model_class(model)
-    if model_information.model_name == "test":
+    if model_information.provider_name is None:
         return model_information.model_class()
     return model_information.model_class(
-        model_name=model_information.model_name, 
+        model_name=model_information.model_name,
         provider=infer_provider(model_information.provider_name),
     )
 
